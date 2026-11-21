@@ -84,17 +84,17 @@ class ChatCompletionsAPI(
         messages: List<UIMessage>,
         params: TextGenerationParams,
     ): TextGenerationResult = withContext(Dispatchers.IO) {
-        val requestBody =
-            buildChatCompletionRequest(
-                messages = messages,
-                params = params,
-                providerSetting = providerSetting
-            )
+        val requestBody = buildChatCompletionStreamingBody(
+            messages = messages,
+            params = params,
+            providerSetting = providerSetting,
+            stream = false,
+        )
 
         val request = Request.Builder()
             .url("${providerSetting.baseUrl}${providerSetting.chatCompletionsPath}")
             .headers(providerSetting.mergeCustomHeaders(params.customHeaders))
-            .post(json.encodeToString(requestBody).toRequestBody("application/json".toMediaType()))
+            .post(requestBody)
             .addHeader(
                 "Authorization",
                 "Bearer ${keyRoulette.next(providerSetting.apiKey, providerSetting.id.toString())}"
@@ -103,7 +103,7 @@ class ChatCompletionsAPI(
             .configureSessionHeaders(providerSetting.baseUrl, params.sessionId)
             .build()
 
-        logRequestBody(TAG, "generateText") { json.encodeToString(requestBody) }
+        logRequestBody(TAG, "generateText") { "messages=${messages.size}" }
 
         val response = client.newCall(request).await()
         if (!response.isSuccessful) {
@@ -139,7 +139,7 @@ class ChatCompletionsAPI(
         messages: List<UIMessage>,
         params: TextGenerationParams,
     ): Flow<StreamChunk> = callbackFlow {
-        val requestBody = buildChatCompletionRequest(
+        val requestBody = buildChatCompletionStreamingBody(
             messages = messages,
             params = params,
             providerSetting = providerSetting,
@@ -149,7 +149,7 @@ class ChatCompletionsAPI(
         val request = Request.Builder()
             .url("${providerSetting.baseUrl}${providerSetting.chatCompletionsPath}")
             .headers(providerSetting.mergeCustomHeaders(params.customHeaders))
-            .post(json.encodeToString(requestBody).toRequestBody("application/json".toMediaType()))
+            .post(requestBody)
             .addHeader(
                 "Authorization",
                 "Bearer ${keyRoulette.next(providerSetting.apiKey, providerSetting.id.toString())}"
@@ -159,7 +159,7 @@ class ChatCompletionsAPI(
             .configureSessionHeaders(providerSetting.baseUrl, params.sessionId)
             .build()
 
-        logRequestBody(TAG, "streamText") { json.encodeToString(requestBody) }
+        logRequestBody(TAG, "streamText") { "messages=${messages.size}, stream=true" }
 
         // just for debugging response body
         // println(client.newCall(request).await().body?.string())
@@ -229,29 +229,49 @@ class ChatCompletionsAPI(
         // trySend 在缓冲满时会静默丢弃 delta，导致回复中间缺字 (#1295)，因此缓冲必须无界
     }.buffer(Channel.UNLIMITED).flowOn(Dispatchers.IO)
 
+    internal fun buildChatCompletionRequestEnvelope(
+        messages: List<UIMessage>,
+        params: TextGenerationParams,
+        providerSetting: ProviderSetting.OpenAI,
+        stream: Boolean = false,
+    ): JsonObject = buildChatCompletionRequest(
+        messages = messages,
+        params = params,
+        providerSetting = providerSetting,
+        stream = stream,
+        includeMessages = false,
+    )
+
+    internal fun reasoningReplayFormatFor(providerSetting: ProviderSetting.OpenAI): ReasoningReplayFormat =
+        when (providerSetting.baseUrl.toHttpUrl().host) {
+            "openrouter.ai" -> ReasoningReplayFormat.OPENROUTER_DETAILS
+            "api.mistral.ai" -> ReasoningReplayFormat.MISTRAL_THINKING_CHUNK
+            else -> ReasoningReplayFormat.REASONING_CONTENT
+        }
+
+    @JvmOverloads
     private fun buildChatCompletionRequest(
         messages: List<UIMessage>,
         params: TextGenerationParams,
         providerSetting: ProviderSetting.OpenAI,
         stream: Boolean = false,
+        includeMessages: Boolean = true,
     ): JsonObject {
         val host = providerSetting.baseUrl.toHttpUrl().host
         val isOpenRouter = host == "openrouter.ai"
         return buildJsonObject {
             put("model", params.model.modelId)
-            put(
-                "messages",
-                buildMessages(
-                    messages = messages,
-                    includeHistoryReasoning = providerSetting.includeHistoryReasoning,
-                    reasoningReplayFormat = when (host) {
-                        "openrouter.ai" -> ReasoningReplayFormat.OPENROUTER_DETAILS
-                        "api.mistral.ai" -> ReasoningReplayFormat.MISTRAL_THINKING_CHUNK
-                        else -> ReasoningReplayFormat.REASONING_CONTENT
-                    },
-                    supportInputModalities = params.model.inputModalities,
+            if (includeMessages) {
+                put(
+                    "messages",
+                    buildMessages(
+                        messages = messages,
+                        includeHistoryReasoning = providerSetting.includeHistoryReasoning,
+                        reasoningReplayFormat = reasoningReplayFormatFor(providerSetting),
+                        supportInputModalities = params.model.inputModalities,
+                    ),
                 )
-            )
+            }
 
             if (isModelAllowTemperature(params.model)) {
                 if (params.temperature != null) put("temperature", params.temperature)
@@ -620,7 +640,7 @@ class ChatCompletionsAPI(
                                     part.encodeBase64().onSuccess { encodedImage ->
                                         put("type", "image_url")
                                         put("image_url", buildJsonObject {
-                                            put("url", encodedImage.base64)
+                                            put("url", encodedImage.dataUriInline())
                                         })
                                     }.onFailure {
                                         it.printStackTrace()
@@ -677,7 +697,7 @@ class ChatCompletionsAPI(
                                     part.encodeBase64().onSuccess { encodedImage ->
                                         put("type", "image_url")
                                         put("image_url", buildJsonObject {
-                                            put("url", encodedImage.base64)
+                                            put("url", encodedImage.dataUriInline())
                                         })
                                     }.onFailure {
                                         it.printStackTrace()
@@ -725,7 +745,7 @@ class ChatCompletionsAPI(
                                 part.encodeBase64().onSuccess { encodedImage ->
                                     put("type", "image_url")
                                     put("image_url", buildJsonObject {
-                                        put("url", encodedImage.base64)
+                                        put("url", encodedImage.dataUriInline())
                                     })
                                 }.onFailure {
                                     Log.w(TAG, "encode tool result image failed: ${part.url}", it)

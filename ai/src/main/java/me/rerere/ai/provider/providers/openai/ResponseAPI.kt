@@ -472,7 +472,7 @@ class ResponseAPI(
                                             is UIMessagePart.Image -> add(buildJsonObject {
                                                 part.encodeBase64().onSuccess { encoded ->
                                                     put("type", "input_image")
-                                                    put("image_url", encoded.base64)
+                                                    put("image_url", encoded.dataUriInline())
                                                 }.onFailure {
                                                     it.printStackTrace()
                                                     put("type", "input_text")
@@ -564,7 +564,7 @@ class ResponseAPI(
                                 add(buildJsonObject {
                                     part.encodeBase64().onSuccess { encodedImage ->
                                         put("type", "input_image")
-                                        put("image_url", encodedImage.base64)
+                                        put("image_url", encodedImage.dataUriInline())
                                     }.onFailure {
                                         it.printStackTrace()
                                         put("type", "input_text")

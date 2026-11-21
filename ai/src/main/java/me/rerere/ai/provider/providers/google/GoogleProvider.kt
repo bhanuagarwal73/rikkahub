@@ -796,7 +796,7 @@ class GoogleProvider(private val client: OkHttpClient, context: Context? = null)
                 buildJsonObject {
                     put("inlineData", buildJsonObject {
                         put("mimeType", encoded.mimeType)
-                        put("data", encoded.base64)
+                        put("data", encoded.base64DataOnly())
                     })
                     metadataAs<GoogleThoughtMetadata>()?.thoughtSignature?.let {
                         put("thoughtSignature", it)

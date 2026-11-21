@@ -408,12 +408,12 @@ internal class InteractionsAPI(
         is UIMessagePart.Image -> encodeBase64(false).getOrNull()?.let { encoded ->
             buildJsonObject {
                 put("type", "image")
-                if (encoded.base64.startsWith("http")) {
-                    put("uri", encoded.base64)
+                val payload = encoded.dataUriInline()
+                if (payload.startsWith("http")) {
+                    put("uri", payload)
                 } else {
                     put("mime_type", encoded.mimeType)
-                    // data URL 会原样返回，这里只取 base64 数据部分
-                    put("data", encoded.base64.substringAfter(";base64,"))
+                    put("data", encoded.base64DataOnly())
                 }
             }
         }

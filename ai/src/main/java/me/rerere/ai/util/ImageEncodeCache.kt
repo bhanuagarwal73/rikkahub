@@ -2,6 +2,7 @@ package me.rerere.ai.util
 
 import android.util.Log
 import java.io.File
+import java.io.OutputStream
 import java.security.MessageDigest
 
 private const val TAG = "ImageEncodeCache"
@@ -14,9 +15,10 @@ private const val TAG = "ImageEncodeCache"
  * 由 [me.rerere.ai.provider.ProviderManager] 初始化缓存目录；未初始化时（例如单元测试）不缓存。
  */
 object ImageEncodeCache {
-    // 压缩逻辑变化时递增，让旧缓存失效
-    private const val VERSION = 1
+    // 压缩逻辑或 data URI 写法变化时递增，让旧缓存失效
+    private const val VERSION = 2
     private const val MAX_TOTAL_BYTES = 256L * 1024 * 1024
+    private val CACHE_SUFFIXES = listOf("jpg", "datauri")
 
     @Volatile
     private var dir: File? = null
@@ -25,15 +27,49 @@ object ImageEncodeCache {
         dir = cacheDir.resolve("encoded_images")
     }
 
-    internal fun get(key: String): File? {
-        val file = fileOf(key) ?: return null
+    internal fun getJpeg(key: String): File? = getCachedFile(key, "jpg")
+
+    internal fun putJpeg(key: String, bytes: ByteArray) {
+        writeBytes(cacheFile(key, "jpg"), bytes)
+    }
+
+    internal fun getDataUri(key: String): File? = getCachedFile(key, "datauri")
+
+    internal fun putDataUri(key: String, writeContent: (OutputStream) -> Unit) {
+        val target = cacheFile(key, "datauri") ?: return
+        runCatching {
+            val parent = target.parentFile ?: return
+            parent.mkdirs()
+            val temp = File.createTempFile("tmp_", ".part", parent)
+            try {
+                temp.outputStream().use(writeContent)
+                if (!temp.renameTo(target)) {
+                    target.delete()
+                    check(temp.renameTo(target)) { "Failed to move data URI cache to $target" }
+                }
+            } finally {
+                temp.delete()
+            }
+            touch(target)
+            trim(parent)
+        }.onFailure {
+            Log.w(TAG, "Failed to write data URI cache", it)
+        }
+    }
+
+    private fun getCachedFile(key: String, suffix: String): File? {
+        val file = cacheFile(key, suffix) ?: return null
         if (!file.isFile || file.length() == 0L) return null
-        file.setLastModified(System.currentTimeMillis())
+        touch(file)
         return file
     }
 
-    internal fun put(key: String, bytes: ByteArray) {
-        val target = fileOf(key) ?: return
+    private fun touch(file: File) {
+        file.setLastModified(System.currentTimeMillis())
+    }
+
+    private fun writeBytes(target: File?, bytes: ByteArray) {
+        if (target == null) return
         runCatching {
             val parent = target.parentFile ?: return
             parent.mkdirs()
@@ -48,20 +84,21 @@ object ImageEncodeCache {
             } finally {
                 temp.delete()
             }
+            touch(target)
             trim(parent)
         }.onFailure {
             Log.w(TAG, "Failed to write encoded image cache", it)
         }
     }
 
-    private fun fileOf(key: String): File? {
+    private fun cacheFile(key: String, suffix: String): File? {
         val dir = dir ?: return null
-        return dir.resolve("${sha256("$VERSION|$key")}.jpg")
+        return dir.resolve("${sha256("$VERSION|$key")}.$suffix")
     }
 
     @Synchronized
     private fun trim(dir: File) {
-        val files = dir.listFiles()?.filter { it.isFile && it.extension == "jpg" } ?: return
+        val files = dir.listFiles()?.filter { it.isFile && it.extension in CACHE_SUFFIXES } ?: return
         var total = files.sumOf { it.length() }
         if (total <= MAX_TOTAL_BYTES) return
         for (file in files.sortedBy { it.lastModified() }) {

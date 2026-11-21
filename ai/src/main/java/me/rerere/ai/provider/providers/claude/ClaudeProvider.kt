@@ -747,7 +747,7 @@ class ClaudeProvider(private val client: OkHttpClient, context: Context? = null)
                 put("source", buildJsonObject {
                     put("type", "base64")
                     put("media_type", encoded.mimeType)
-                    put("data", encoded.base64)
+                    put("data", encoded.base64DataOnly())
                 })
             }.onFailure {
                 Log.w(TAG, "encode image failed: $url", it)

@@ -8,8 +8,11 @@ import android.util.Base64
 import android.util.Base64OutputStream
 import androidx.core.net.toUri
 import me.rerere.ai.ui.UIMessagePart
+import okio.BufferedSink
+import okio.source
 import java.io.ByteArrayOutputStream
 import java.io.File
+import java.io.OutputStream
 
 private val supportedTypes = setOf(
     "image/jpeg",
@@ -19,9 +22,42 @@ private val supportedTypes = setOf(
 )
 
 data class EncodedImage(
-    val base64: String,
-    val mimeType: String
-)
+    val mimeType: String,
+    val base64: String? = null,
+    internal val dataUriFile: File? = null,
+) {
+    init {
+        require(!base64.isNullOrBlank() || dataUriFile != null) { "EncodedImage needs inline data or a cache file" }
+    }
+
+    /** 需要把整个 data URI 放进内存时用；多图请求应优先 [writeDataUriToJson]。 */
+    fun dataUriInline(): String =
+        base64 ?: dataUriFile?.readText() ?: error("EncodedImage has no data")
+
+    /** 不含 `data:…;base64,` 前缀的 payload；Claude / Gemini 等接口使用。 */
+    fun base64DataOnly(): String {
+        val raw = dataUriInline()
+        return if (raw.startsWith("data:")) raw.substringAfter(";base64,", raw) else raw
+    }
+
+    /** OpenAI `image_url.url` 等字段：流式写入 JSON 字符串，不把整段 base64 载入堆。 */
+    internal fun writeDataUriQuoted(stream: JsonStreamWriter) {
+        if (base64 != null) {
+            stream.writeRawQuotedFromInline(base64)
+        } else {
+            stream.writeRawQuoted(dataUriFile!!)
+        }
+    }
+
+    /** 非 JSON 场景下把 data URI 流式写入 sink（如导出、文件上传）。 */
+    internal fun writeDataUriTo(sink: BufferedSink) {
+        if (base64 != null) {
+            sink.writeUtf8(base64)
+        } else {
+            dataUriFile!!.source().use { sink.writeAll(it) }
+        }
+    }
+}
 
 internal enum class ExifTransformType {
     NONE,
@@ -59,22 +95,15 @@ fun UIMessagePart.Image.encodeBase64(withPrefix: Boolean = true): Result<Encoded
                 throw IllegalArgumentException("File does not exist: ${this.url}")
             }
             val mimeType = file.guessMimeType().getOrThrow()
-            // 统一进行压缩处理
-            val (encoded, outputMimeType) = file.compressAndEncode(mimeType)
-            EncodedImage(
-                base64 = if (withPrefix) "data:$outputMimeType;base64,$encoded" else encoded,
-                mimeType = outputMimeType
-            )
+            file.compressAndEncode(mimeType, withPrefix = withPrefix)
         }
 
         this.url.startsWith("data:") -> {
-            // 从 data URL 提取 mime type
             val mimeType = url.substringAfter("data:").substringBefore(";")
-            EncodedImage(base64 = url, mimeType = mimeType)
+            EncodedImage(mimeType = mimeType, base64 = url)
         }
         this.url.startsWith("http") -> {
-            // HTTP URL 无法确定 mime type，默认使用 image/png
-            EncodedImage(base64 = url, mimeType = "image/png")
+            EncodedImage(mimeType = "image/png", base64 = url)
         }
         else -> throw IllegalArgumentException("Unsupported URL format: $url")
     }
@@ -116,25 +145,58 @@ fun UIMessagePart.Audio.encodeBase64(withPrefix: Boolean = true): Result<String>
 
 private fun File.compressAndEncode(
     mimeType: String,
+    withPrefix: Boolean,
     maxDimension: Int = 10_000,
     maxPixels: Long = 16_000_000L,
     quality: Int = 85
-): Pair<String, String> {
-    // GIF 保持原样（可能是动图）
-    if (mimeType == "image/gif") {
-        return Pair(encodeToBase64Streaming(), mimeType)
+): EncodedImage {
+    val cacheKey = "$absolutePath|${lastModified()}|${length()}|$maxDimension|$maxPixels|$quality|pfx=$withPrefix"
+
+    val outputMimeType = if (mimeType == "image/gif") mimeType else "image/jpeg"
+    ImageEncodeCache.getDataUri(cacheKey)?.let { cached ->
+        return EncodedImage(mimeType = outputMimeType, dataUriFile = cached)
     }
 
-    // 历史图片每轮请求都会重新编码，命中缓存时跳过解码和 JPEG 重编码
-    val cacheKey = "$absolutePath|${lastModified()}|${length()}|$maxDimension|$maxPixels|$quality"
-    // 缓存文件可能在命中后、读取前被系统清理，读取失败按未命中处理，继续从原图编码
-    ImageEncodeCache.get(cacheKey)
-        ?.let { cached -> runCatching { cached.encodeToBase64Streaming() }.getOrNull() }
-        ?.let { encoded -> return Pair(encoded, "image/jpeg") }
+    if (mimeType == "image/gif") {
+        val dataUriFile = writeDataUriCache(cacheKey, mimeType, withPrefix) { out, prefix ->
+            out.write(prefix.toByteArray(Charsets.UTF_8))
+            inputStream().use { input ->
+                Base64OutputStream(out, Base64.NO_WRAP).use { b64 -> input.copyTo(b64) }
+            }
+        }
+        return EncodedImage(mimeType = mimeType, dataUriFile = dataUriFile)
+    }
+
+    ImageEncodeCache.getJpeg(cacheKey)?.let { cachedJpeg ->
+        val dataUriFile = writeDataUriCache(cacheKey, "image/jpeg", withPrefix) { out, prefix ->
+            out.write(prefix.toByteArray(Charsets.UTF_8))
+            cachedJpeg.inputStream().use { input ->
+                Base64OutputStream(out, Base64.NO_WRAP).use { b64 -> input.copyTo(b64) }
+            }
+        }
+        return EncodedImage(mimeType = "image/jpeg", dataUriFile = dataUriFile)
+    }
 
     val jpegBytes = compressToJpeg(maxDimension = maxDimension, maxPixels = maxPixels, quality = quality)
-    ImageEncodeCache.put(cacheKey, jpegBytes)
-    return Pair(Base64.encodeToString(jpegBytes, Base64.NO_WRAP), "image/jpeg")
+    ImageEncodeCache.putJpeg(cacheKey, jpegBytes)
+    val dataUriFile = writeDataUriCache(cacheKey, "image/jpeg", withPrefix) { out, prefix ->
+        out.write(prefix.toByteArray(Charsets.UTF_8))
+        Base64OutputStream(out, Base64.NO_WRAP).use { b64 ->
+            b64.write(jpegBytes)
+        }
+    }
+    return EncodedImage(mimeType = "image/jpeg", dataUriFile = dataUriFile)
+}
+
+private fun File.writeDataUriCache(
+    cacheKey: String,
+    mimeType: String,
+    withPrefix: Boolean,
+    writer: (OutputStream, String) -> Unit,
+): File? {
+    val prefix = if (withPrefix) "data:$mimeType;base64," else ""
+    ImageEncodeCache.putDataUri(cacheKey) { out -> writer(out, prefix) }
+    return ImageEncodeCache.getDataUri(cacheKey)
 }
 
 private fun File.compressToJpeg(maxDimension: Int, maxPixels: Long, quality: Int): ByteArray {

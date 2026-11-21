@@ -408,7 +408,7 @@ private fun buildMarkdownExport(
                 }
 
                 is UIMessagePart.Image -> {
-                    append("![Image](${part.encodeBase64().getOrNull()?.base64})")
+                    append("![Image](${part.encodeBase64().getOrNull()?.dataUriInline()})")
                     appendLine()
                 }
 
@@ -464,7 +464,7 @@ private fun buildMarkdownExport(
                                 }
 
                                 is UIMessagePart.Image -> {
-                                    append("![Tool Image](${outputPart.encodeBase64().getOrNull()?.base64})")
+                                    append("![Tool Image](${outputPart.encodeBase64().getOrNull()?.dataUriInline()})")
                                     appendLine()
                                 }
 
