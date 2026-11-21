@@ -13,6 +13,7 @@ android {
 }
 
 dependencies {
+    implementation(project(":ai"))
     implementation(project(":common"))
 
     implementation(libs.androidx.core.ktx)

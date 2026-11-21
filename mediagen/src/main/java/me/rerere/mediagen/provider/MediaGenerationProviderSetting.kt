@@ -2,6 +2,7 @@ package me.rerere.mediagen.provider
 
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import me.rerere.ai.provider.CustomHeader
 import me.rerere.mediagen.model.MediaGenerationModel
 import me.rerere.mediagen.model.MediaKind
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
@@ -17,6 +18,7 @@ sealed class MediaGenerationProviderSetting {
     abstract val apiKey: String
     abstract val baseUrl: String
     abstract val models: List<MediaGenerationModel>
+    abstract val customHeaders: List<CustomHeader>
 
     // What our adapter implements, not every API offered by this vendor.
     abstract val supportedKinds: Set<MediaKind>
@@ -26,6 +28,14 @@ sealed class MediaGenerationProviderSetting {
      * OpenRouter 的视频、以及部分 MiniMax 中转站的结果要凭 API Key 从它自己的接口取。
      */
     open fun downloadHeaders(url: String): Map<String, String> = emptyMap()
+
+    /** 下载产出时合并 [downloadHeaders] 与自定义头；同名时自定义头优先。 */
+    fun downloadRequestHeaders(url: String): Map<String, String> {
+        val custom = customHeaders
+            .filter { it.name.isNotBlank() }
+            .associate { it.name.trim() to it.value }
+        return downloadHeaders(url) + custom
+    }
 
     // 密钥只发给 baseUrl 所在的站点，结果地址指向别处时原样下载
     protected fun sameOriginBearer(url: String): Map<String, String> {
@@ -41,6 +51,7 @@ sealed class MediaGenerationProviderSetting {
         apiKey: String = this.apiKey,
         baseUrl: String = this.baseUrl,
         models: List<MediaGenerationModel> = this.models,
+        customHeaders: List<CustomHeader> = this.customHeaders,
     ): MediaGenerationProviderSetting
 
     @Serializable
@@ -54,6 +65,7 @@ sealed class MediaGenerationProviderSetting {
             MediaGenerationModel(modelId = "gpt-image-2.5-sunburst", kind = MediaKind.IMAGE),
             MediaGenerationModel(modelId = "gpt-image-2.5-flare", kind = MediaKind.IMAGE),
         ),
+        override val customHeaders: List<CustomHeader> = emptyList(),
     ) : MediaGenerationProviderSetting() {
         override val supportedKinds: Set<MediaKind>
             get() = setOf(MediaKind.IMAGE)
@@ -64,6 +76,7 @@ sealed class MediaGenerationProviderSetting {
             apiKey: String,
             baseUrl: String,
             models: List<MediaGenerationModel>,
+            customHeaders: List<CustomHeader>,
         ): MediaGenerationProviderSetting {
             return this.copy(
                 id = id,
@@ -71,6 +84,7 @@ sealed class MediaGenerationProviderSetting {
                 apiKey = apiKey,
                 baseUrl = baseUrl,
                 models = models,
+                customHeaders = customHeaders,
             )
         }
     }
@@ -91,6 +105,7 @@ sealed class MediaGenerationProviderSetting {
             MediaGenerationModel(modelId = "qwen-image-3.0", kind = MediaKind.IMAGE),
             MediaGenerationModel(modelId = "wan3.0-video", kind = MediaKind.VIDEO),
         ),
+        override val customHeaders: List<CustomHeader> = emptyList(),
     ) : MediaGenerationProviderSetting() {
         override val supportedKinds: Set<MediaKind>
             get() = setOf(MediaKind.IMAGE, MediaKind.VIDEO)
@@ -101,6 +116,7 @@ sealed class MediaGenerationProviderSetting {
             apiKey: String,
             baseUrl: String,
             models: List<MediaGenerationModel>,
+            customHeaders: List<CustomHeader>,
         ): MediaGenerationProviderSetting {
             return this.copy(
                 id = id,
@@ -108,6 +124,7 @@ sealed class MediaGenerationProviderSetting {
                 apiKey = apiKey,
                 baseUrl = baseUrl,
                 models = models,
+                customHeaders = customHeaders,
             )
         }
 
@@ -127,6 +144,7 @@ sealed class MediaGenerationProviderSetting {
             MediaGenerationModel(modelId = "doubao-seedream-5-0-pro-260628", kind = MediaKind.IMAGE),
             MediaGenerationModel(modelId = "doubao-seedance-2-5-260628", kind = MediaKind.VIDEO),
         ),
+        override val customHeaders: List<CustomHeader> = emptyList(),
     ) : MediaGenerationProviderSetting() {
         override val supportedKinds: Set<MediaKind>
             get() = setOf(MediaKind.IMAGE, MediaKind.VIDEO)
@@ -137,6 +155,7 @@ sealed class MediaGenerationProviderSetting {
             apiKey: String,
             baseUrl: String,
             models: List<MediaGenerationModel>,
+            customHeaders: List<CustomHeader>,
         ): MediaGenerationProviderSetting {
             return this.copy(
                 id = id,
@@ -144,6 +163,7 @@ sealed class MediaGenerationProviderSetting {
                 apiKey = apiKey,
                 baseUrl = baseUrl,
                 models = models,
+                customHeaders = customHeaders,
             )
         }
     }
@@ -158,6 +178,7 @@ sealed class MediaGenerationProviderSetting {
         override val models: List<MediaGenerationModel> = listOf(
             MediaGenerationModel(modelId = "MiniMax-H3", kind = MediaKind.VIDEO),
         ),
+        override val customHeaders: List<CustomHeader> = emptyList(),
     ) : MediaGenerationProviderSetting() {
         override val supportedKinds: Set<MediaKind>
             get() = setOf(MediaKind.VIDEO)
@@ -171,6 +192,7 @@ sealed class MediaGenerationProviderSetting {
             apiKey: String,
             baseUrl: String,
             models: List<MediaGenerationModel>,
+            customHeaders: List<CustomHeader>,
         ): MediaGenerationProviderSetting {
             return this.copy(
                 id = id,
@@ -178,6 +200,7 @@ sealed class MediaGenerationProviderSetting {
                 apiKey = apiKey,
                 baseUrl = baseUrl,
                 models = models,
+                customHeaders = customHeaders,
             )
         }
     }
@@ -194,6 +217,7 @@ sealed class MediaGenerationProviderSetting {
             MediaGenerationModel(modelId = "openai/gpt-image-2.5-flare", kind = MediaKind.IMAGE),
             MediaGenerationModel(modelId = "google/veo-3.1", kind = MediaKind.VIDEO),
         ),
+        override val customHeaders: List<CustomHeader> = emptyList(),
     ) : MediaGenerationProviderSetting() {
         override val supportedKinds: Set<MediaKind>
             get() = setOf(MediaKind.IMAGE, MediaKind.VIDEO)
@@ -206,6 +230,7 @@ sealed class MediaGenerationProviderSetting {
             apiKey: String,
             baseUrl: String,
             models: List<MediaGenerationModel>,
+            customHeaders: List<CustomHeader>,
         ): MediaGenerationProviderSetting {
             return this.copy(
                 id = id,
@@ -213,6 +238,7 @@ sealed class MediaGenerationProviderSetting {
                 apiKey = apiKey,
                 baseUrl = baseUrl,
                 models = models,
+                customHeaders = customHeaders,
             )
         }
     }

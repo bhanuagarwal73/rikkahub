@@ -30,6 +30,7 @@ import me.rerere.rikkahub.ui.components.ui.CardGroupIcon
 import me.rerere.rikkahub.ui.components.ui.CardGroupValue
 import me.rerere.rikkahub.ui.components.ui.ConnectedChoiceButtons
 import me.rerere.rikkahub.ui.components.ui.ConnectedChoiceLabel
+import me.rerere.rikkahub.ui.pages.assistant.detail.CustomHeaders
 
 val MediaGenerationProviderSetting.typeName: String
     @Composable get() = when (this) {
@@ -126,6 +127,20 @@ fun MediaGenerationProviderBasicConfigure(
                 }
             }
         }
+    }
+}
+
+@Composable
+fun MediaGenerationProviderCustomHeadersConfigure(
+    setting: MediaGenerationProviderSetting,
+    modifier: Modifier = Modifier,
+    onValueChange: (MediaGenerationProviderSetting) -> Unit,
+) {
+    ConfigureColumn(modifier) {
+        CustomHeaders(
+            headers = setting.customHeaders,
+            onUpdate = { headers -> onValueChange(setting.copyProvider(customHeaders = headers)) },
+        )
     }
 }
 

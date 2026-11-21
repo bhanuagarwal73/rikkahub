@@ -16,7 +16,7 @@ import me.rerere.mediagen.model.MediaGenerationStatus
 import me.rerere.mediagen.model.MediaGenerationTask
 import me.rerere.mediagen.model.MediaGenerationUsage
 import me.rerere.mediagen.provider.MediaGenerationProviderSetting
-import me.rerere.mediagen.provider.providers.bearerRequest
+import me.rerere.mediagen.provider.providers.authenticatedRequest
 import me.rerere.mediagen.provider.providers.executeJson
 import me.rerere.mediagen.provider.providers.imageMimeType
 import me.rerere.mediagen.provider.providers.long
@@ -44,7 +44,7 @@ internal class VolcengineImageGeneration(
     ): MediaGenerationTask {
         // 本地图片要读出来编码成 data URI
         val body = withContext(Dispatchers.IO) { buildBody(model, request) }
-        val httpRequest = bearerRequest("${setting.baseUrl.trimEnd('/')}/images/generations", setting.apiKey)
+        val httpRequest = setting.authenticatedRequest("${setting.baseUrl.trimEnd('/')}/images/generations")
             .postJson(body)
             .build()
         return parseTask(client.executeJson(httpRequest, id), model.modelId)

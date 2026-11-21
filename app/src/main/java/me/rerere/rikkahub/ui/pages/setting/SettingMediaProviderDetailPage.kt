@@ -50,6 +50,7 @@ import me.rerere.hugeicons.HugeIcons
 import me.rerere.hugeicons.stroke.Delete01
 import me.rerere.hugeicons.stroke.FloppyDisk
 import me.rerere.hugeicons.stroke.Package01
+import me.rerere.hugeicons.stroke.Settings03
 import me.rerere.hugeicons.stroke.Tools
 import me.rerere.rikkahub.R
 import me.rerere.rikkahub.ui.components.nav.BackButton
@@ -59,6 +60,7 @@ import me.rerere.rikkahub.ui.components.ui.PagerTabs
 import me.rerere.rikkahub.ui.context.LocalNavController
 import me.rerere.rikkahub.ui.context.LocalToaster
 import me.rerere.rikkahub.ui.pages.setting.components.MediaGenerationProviderBasicConfigure
+import me.rerere.rikkahub.ui.pages.setting.components.MediaGenerationProviderCustomHeadersConfigure
 import me.rerere.rikkahub.ui.pages.setting.components.MediaGenerationProviderModelsConfigure
 import me.rerere.rikkahub.ui.pages.setting.components.typeName
 import me.rerere.rikkahub.ui.theme.CustomColors
@@ -72,7 +74,8 @@ private enum class MediaProviderDetailTab(
     @param:StringRes private val labelRes: Int,
 ) : PagerTab {
     BASIC(HugeIcons.Tools, R.string.setting_provider_page_basic_settings),
-    MODELS(HugeIcons.Package01, R.string.setting_media_page_models);
+    MODELS(HugeIcons.Package01, R.string.setting_media_page_models),
+    CUSTOM_HEADERS(HugeIcons.Settings03, R.string.assistant_page_custom_headers);
 
     override val label: String
         @Composable get() = stringResource(labelRes)
@@ -170,6 +173,12 @@ fun SettingMediaProviderDetailPage(id: Uuid, vm: SettingVM = koinViewModel()) {
                         )
 
                         MediaProviderDetailTab.MODELS -> MediaGenerationProviderModelsConfigure(
+                            setting = draft,
+                            onValueChange = { draft = it },
+                            modifier = pageModifier,
+                        )
+
+                        MediaProviderDetailTab.CUSTOM_HEADERS -> MediaGenerationProviderCustomHeadersConfigure(
                             setting = draft,
                             onValueChange = { draft = it },
                             modifier = pageModifier,

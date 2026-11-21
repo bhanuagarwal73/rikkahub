@@ -16,6 +16,7 @@ import me.rerere.mediagen.model.MediaGenerationTask
 import me.rerere.mediagen.model.MediaGenerationUsage
 import me.rerere.mediagen.provider.MediaGenerationProvider
 import me.rerere.mediagen.provider.MediaGenerationProviderSetting
+import me.rerere.mediagen.provider.providers.authenticatedRequest
 import me.rerere.mediagen.provider.providers.executeJson
 import me.rerere.mediagen.provider.providers.imageMimeType
 import me.rerere.mediagen.provider.providers.long
@@ -46,11 +47,12 @@ class OpenAIMediaGenerationProvider(
         request: MediaGenerationRequest,
     ): Result<MediaGenerationTask> = runCatching {
         val baseUrl = setting.baseUrl.trimEnd('/')
-        val builder = Request.Builder().addHeader("Authorization", "Bearer ${setting.apiKey}")
         val httpRequest = if (request.inputs.isEmpty()) {
-            builder.url("$baseUrl/images/generations").postJson(buildGenerationBody(setting, model, request))
+            setting.authenticatedRequest("$baseUrl/images/generations")
+                .postJson(buildGenerationBody(setting, model, request))
         } else {
-            builder.url("$baseUrl/images/edits").post(buildEditBody(setting, model, request))
+            setting.authenticatedRequest("$baseUrl/images/edits")
+                .post(buildEditBody(setting, model, request))
         }.build()
         parseTask(client.executeJson(httpRequest, id), model.modelId)
     }

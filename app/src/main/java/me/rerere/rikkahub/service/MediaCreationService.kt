@@ -440,7 +440,7 @@ class MediaCreationService(
         attempts: Int = DOWNLOAD_ATTEMPTS,
     ) {
         // 个别厂商的结果地址没有签名，要带着密钥去取
-        val request = Request.Builder().url(url).headers(setting.downloadHeaders(url).toHeaders()).build()
+        val request = Request.Builder().url(url).headers(setting.downloadRequestHeaders(url).toHeaders()).build()
         var attempt = 0
         while (true) {
             attempt++

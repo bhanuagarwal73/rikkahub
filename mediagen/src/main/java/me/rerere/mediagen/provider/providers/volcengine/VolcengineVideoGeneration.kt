@@ -14,6 +14,7 @@ import me.rerere.mediagen.model.MediaGenerationStatus
 import me.rerere.mediagen.model.MediaGenerationTask
 import me.rerere.mediagen.model.MediaGenerationUsage
 import me.rerere.mediagen.provider.MediaGenerationProviderSetting
+import me.rerere.mediagen.provider.providers.authenticatedRequest
 import me.rerere.mediagen.provider.providers.double
 import me.rerere.mediagen.provider.providers.executeJson
 import me.rerere.mediagen.provider.providers.long
@@ -33,8 +34,7 @@ internal class VolcengineVideoGeneration(
         model: MediaGenerationModel,
         request: MediaGenerationRequest,
     ): MediaGenerationTask {
-        val httpRequest = authorizedRequest(
-            setting,
+        val httpRequest = setting.authenticatedRequest(
             "${setting.baseUrl.trimEnd('/')}/contents/generations/tasks",
         ).postJson(buildCreateBody(model, request)).build()
         return parseTask(client.executeJson(httpRequest, id), model.modelId)
@@ -45,8 +45,7 @@ internal class VolcengineVideoGeneration(
         model: MediaGenerationModel,
         taskId: String,
     ): MediaGenerationTask {
-        val httpRequest = authorizedRequest(
-            setting,
+        val httpRequest = setting.authenticatedRequest(
             "${setting.baseUrl.trimEnd('/')}/contents/generations/tasks/$taskId",
         ).get().build()
         return parseTask(client.executeJson(httpRequest, id), model.modelId)
@@ -149,14 +148,6 @@ internal class VolcengineVideoGeneration(
             metadata = root,
         )
     }
-
-    private fun authorizedRequest(
-        setting: MediaGenerationProviderSetting.Volcengine,
-        url: String,
-    ): Request.Builder = Request.Builder()
-        .url(url)
-        .addHeader("Authorization", "Bearer ${setting.apiKey}")
-        .addHeader("Content-Type", "application/json")
 
     private fun mapStatus(status: String?): MediaGenerationStatus = when (status?.lowercase()) {
         "queued" -> MediaGenerationStatus.QUEUED

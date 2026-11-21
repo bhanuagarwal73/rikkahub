@@ -15,6 +15,7 @@ import me.rerere.mediagen.model.MediaGenerationTask
 import me.rerere.mediagen.model.MediaGenerationUsage
 import me.rerere.mediagen.provider.MediaGenerationProvider
 import me.rerere.mediagen.provider.MediaGenerationProviderSetting
+import me.rerere.mediagen.provider.providers.authenticatedRequest
 import me.rerere.mediagen.provider.providers.double
 import me.rerere.mediagen.provider.providers.executeJson
 import me.rerere.mediagen.provider.providers.int
@@ -36,8 +37,7 @@ class MiniMaxMediaGenerationProvider(
         request: MediaGenerationRequest,
     ): Result<MediaGenerationTask> = runCatching {
         require(!request.prompt.isNullOrBlank()) { "MiniMax H3 requires a non-empty prompt" }
-        val httpRequest = authorizedRequest(
-            setting,
+        val httpRequest = setting.authenticatedRequest(
             "${setting.baseUrl.trimEnd('/')}/video_generation",
         ).postJson(buildCreateBody(model, request)).build()
         val root = client.executeJson(httpRequest, id)
@@ -55,8 +55,7 @@ class MiniMaxMediaGenerationProvider(
         model: MediaGenerationModel,
         taskId: String,
     ): Result<MediaGenerationTask> = runCatching {
-        val httpRequest = authorizedRequest(
-            setting,
+        val httpRequest = setting.authenticatedRequest(
             "${setting.baseUrl.trimEnd('/')}/query/video_generation/$taskId",
         ).get().build()
         parseTask(client.executeJson(httpRequest, id))
@@ -163,14 +162,6 @@ class MiniMaxMediaGenerationProvider(
             metadata = task,
         )
     }
-
-    private fun authorizedRequest(
-        setting: MediaGenerationProviderSetting.MiniMax,
-        url: String,
-    ): Request.Builder = Request.Builder()
-        .url(url)
-        .addHeader("Authorization", "Bearer ${setting.apiKey}")
-        .addHeader("Content-Type", "application/json")
 
     private fun mapStatus(status: String?): MediaGenerationStatus = when (status?.lowercase()) {
         "queued" -> MediaGenerationStatus.QUEUED

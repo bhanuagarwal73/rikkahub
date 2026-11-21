@@ -2,6 +2,7 @@ package me.rerere.mediagen.provider
 
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonObject
+import me.rerere.ai.provider.CustomHeader
 import me.rerere.mediagen.model.MediaGenerationModel
 import me.rerere.mediagen.model.MediaKind
 import org.junit.Assert.assertEquals
@@ -44,6 +45,20 @@ class MediaGenerationProviderSettingTest {
             listOf("gpt-image-2.5-sunburst", "gpt-image-2.5-flare", "gpt-image-1"),
             copy.models.map { it.modelId }
         )
+    }
+
+    @Test
+    fun customHeadersSurviveSerialization() {
+        val setting = MediaGenerationProviderSetting.OpenAI(
+            customHeaders = listOf(CustomHeader("X-Proxy", "proxy.example")),
+        )
+
+        val decoded = Json.decodeFromString(
+            MediaGenerationProviderSetting.serializer(),
+            Json.encodeToString(MediaGenerationProviderSetting.serializer(), setting),
+        )
+
+        assertEquals(setting.customHeaders, decoded.customHeaders)
     }
 
     @Test

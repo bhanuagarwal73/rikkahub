@@ -14,6 +14,7 @@ import me.rerere.mediagen.model.MediaGenerationStatus
 import me.rerere.mediagen.model.MediaGenerationTask
 import me.rerere.mediagen.model.MediaGenerationUsage
 import me.rerere.mediagen.provider.MediaGenerationProviderSetting
+import me.rerere.mediagen.provider.providers.authenticatedRequest
 import me.rerere.mediagen.provider.providers.double
 import me.rerere.mediagen.provider.providers.executeJson
 import me.rerere.mediagen.provider.providers.obj
@@ -33,8 +34,7 @@ internal class AliyunVideoGeneration(
         request: MediaGenerationRequest,
     ): MediaGenerationTask {
         val body = buildCreateBody(model, request)
-        val httpRequest = authorizedRequest(
-            setting,
+        val httpRequest = setting.authenticatedRequest(
             "${setting.resolvedBaseUrl()}/services/aigc/video-generation/video-synthesis",
         ).addHeader("X-DashScope-Async", "enable")
             .postJson(body)
@@ -47,8 +47,7 @@ internal class AliyunVideoGeneration(
         model: MediaGenerationModel,
         taskId: String,
     ): MediaGenerationTask {
-        val httpRequest = authorizedRequest(
-            setting,
+        val httpRequest = setting.authenticatedRequest(
             "${setting.resolvedBaseUrl()}/tasks/$taskId",
         ).get().build()
         return parseTask(client.executeJson(httpRequest, id), model.modelId)
@@ -155,14 +154,6 @@ internal class AliyunVideoGeneration(
             metadata = root,
         )
     }
-
-    private fun authorizedRequest(
-        setting: MediaGenerationProviderSetting.Aliyun,
-        url: String,
-    ): Request.Builder = Request.Builder()
-        .url(url)
-        .addHeader("Authorization", "Bearer ${setting.apiKey}")
-        .addHeader("Content-Type", "application/json")
 
     private fun mapStatus(status: String?): MediaGenerationStatus = when (status?.uppercase()) {
         "PENDING" -> MediaGenerationStatus.QUEUED

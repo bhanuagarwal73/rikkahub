@@ -16,7 +16,7 @@ import me.rerere.mediagen.model.MediaGenerationStatus
 import me.rerere.mediagen.model.MediaGenerationTask
 import me.rerere.mediagen.model.MediaGenerationUsage
 import me.rerere.mediagen.provider.MediaGenerationProviderSetting
-import me.rerere.mediagen.provider.providers.bearerRequest
+import me.rerere.mediagen.provider.providers.authenticatedRequest
 import me.rerere.mediagen.provider.providers.executeJson
 import me.rerere.mediagen.provider.providers.imageMimeType
 import me.rerere.mediagen.provider.providers.int
@@ -44,9 +44,8 @@ internal class AliyunImageGeneration(
     ): MediaGenerationTask {
         // 本地图片要读出来编码成 data URI
         val body = withContext(Dispatchers.IO) { buildBody(model, request) }
-        val httpRequest = bearerRequest(
+        val httpRequest = setting.authenticatedRequest(
             "${setting.resolvedBaseUrl()}/services/aigc/multimodal-generation/generation",
-            setting.apiKey,
         ).postJson(body).build()
         return parseTask(client.executeJson(httpRequest, id), model.modelId)
     }

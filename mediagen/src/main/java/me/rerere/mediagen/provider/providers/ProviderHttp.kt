@@ -10,7 +10,9 @@ import kotlinx.serialization.json.intOrNull
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.longOrNull
+import me.rerere.ai.util.toHeaders
 import me.rerere.common.http.await
+import me.rerere.mediagen.provider.MediaGenerationProviderSetting
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -25,6 +27,13 @@ internal val jsonMediaType = "application/json".toMediaType()
 
 internal fun bearerRequest(url: String, apiKey: String): Request.Builder =
     Request.Builder().url(url).addHeader("Authorization", "Bearer $apiKey")
+
+/** 先应用提供商自定义头，再写入 Bearer，与聊天提供商的请求顺序一致。 */
+internal fun MediaGenerationProviderSetting.authenticatedRequest(url: String): Request.Builder =
+    Request.Builder()
+        .url(url)
+        .headers(customHeaders.toHeaders())
+        .addHeader("Authorization", "Bearer $apiKey")
 
 // 响应体在 IO 线程读取，调用方可以直接从主线程协程发起请求
 internal suspend fun OkHttpClient.executeJson(request: Request, provider: String): JsonObject =
