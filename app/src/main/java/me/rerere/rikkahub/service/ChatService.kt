@@ -827,6 +827,21 @@ class ChatService(
             Logging.log(TAG, "runTurn: $e")
             Logging.log(TAG, e.stackTraceToString())
             return TurnResult.Failed
+        } catch (e: OutOfMemoryError) {
+            // OutOfMemoryError 不是 Exception，不会落到上面的 catch；不接住时界面可能一直转圈 (#2365)
+            withContext(NonCancellable) {
+                session.processingStatus.value = null
+            }
+            appEventBus.tryEmit(AppEvent.ChatGenerationEnded(conversationId, senderName, null))
+            session.inbox.pause()
+            Log.e(TAG, "runTurn: out of memory", e)
+            Logging.log(TAG, "runTurn: $e")
+            addError(
+                error = IllegalStateException(context.getString(R.string.error_generation_out_of_memory), e),
+                conversationId = conversationId,
+                title = context.getString(R.string.error_title_generation),
+            )
+            return TurnResult.Failed
         }
     }
 
