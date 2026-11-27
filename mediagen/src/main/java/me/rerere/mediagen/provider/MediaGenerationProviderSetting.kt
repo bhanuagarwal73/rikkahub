@@ -256,6 +256,7 @@ sealed class MediaGenerationProviderSetting {
             MediaGenerationModel(modelId = "gpt-image-2.6-sunburst", kind = MediaKind.IMAGE),
             MediaGenerationModel(modelId = "MiniMax-H3", kind = MediaKind.VIDEO),
         ),
+        override val customHeaders: List<CustomHeader> = emptyList(),
     ) : MediaGenerationProviderSetting() {
         override val supportedKinds: Set<MediaKind>
             get() = setOf(MediaKind.IMAGE, MediaKind.VIDEO)
@@ -266,6 +267,7 @@ sealed class MediaGenerationProviderSetting {
             apiKey: String,
             baseUrl: String,
             models: List<MediaGenerationModel>,
+            customHeaders: List<CustomHeader>,
         ): MediaGenerationProviderSetting {
             return this.copy(
                 id = id,
@@ -273,6 +275,7 @@ sealed class MediaGenerationProviderSetting {
                 apiKey = apiKey,
                 baseUrl = baseUrl,
                 models = models,
+                customHeaders = customHeaders,
             )
         }
     }
